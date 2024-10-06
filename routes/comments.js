@@ -1,23 +1,13 @@
 const express = require('express');
 const router = express.Router();
-const { check } = require('express-validator');
 const commentController = require('../controllers/commentController');
-const authMiddleware = require('../middleware/auth');
 
-// Створення коментаря
-router.post(
-    '/:postId',
-    [
-        authMiddleware,
-        check('content', 'Content is required').not().isEmpty()
-    ],
-    commentController.createComment
-);
+router.get('/:postId', commentController.getCommentsByPost);
 
-// Отримання всіх коментарів до поста
-router.get('/:postId', commentController.getComments);
+router.post('/:postId', commentController.validateCommentCreation, commentController.createComment);
 
-// Видалення коментаря
-router.delete('/:postId/:commentId', authMiddleware, commentController.deleteComment);
+router.put('/:commentId', commentController.validateCommentUpdate, commentController.updateComment);
+
+router.delete('/:commentId', commentController.deleteComment);
 
 module.exports = router;

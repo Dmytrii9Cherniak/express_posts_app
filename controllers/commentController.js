@@ -1,53 +1,76 @@
 const Comment = require('../models/Comment');
-const Post = require('../models/Post');
-const { validationResult } = require('express-validator');
+const { check, validationResult } = require('express-validator');
 
-// Створення коментаря
+exports.getCommentsByPost = async (req, res) => {
+    const { postId } = req.params;
+
+    try {
+        const comments = await Comment.findAll({
+            where: { postId },
+            include: {
+                model: User,
+                as: 'author',
+                attributes: ['id', 'fullName', 'email']
+            }
+        });
+
+        res.status(200).json({ comments });
+    } catch (error) {
+        res.status(500).json({ errors: { message: 'Server error' } });
+    }
+};
+
 exports.createComment = async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: { message: errors.array()[0].msg } });
+    }
+
     const { content } = req.body;
     const { postId } = req.params;
 
     try {
-        // Перевіряємо чи існує пост
-        const post = await Post.findByPk(postId);
-
-        if (!post) {
-            return res.status(404).json({ msg: 'Post not found' });
-        }
-
-        // Створюємо коментар
         const comment = await Comment.create({
             content,
-            postId: post.id,
-            userId: req.user.id, // Беремо ID користувача з токену
+            postId,
+            userId: req.user.id
         });
 
-        res.status(201).json({ comment });
+        res.status(201).json({ message: 'Comment created successfully', comment });
     } catch (error) {
-        res.status(500).json({ error: 'Server error' });
+        res.status(500).json({ errors: { message: 'Server error' } });
     }
 };
 
-// Отримання всіх коментарів до поста
-exports.getComments = async (req, res) => {
-    const { postId } = req.params;
+exports.updateComment = async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: { message: errors.array()[0].msg } });
+    }
+
+    const { content } = req.body;
+    const { commentId } = req.params;
 
     try {
-        const post = await Post.findByPk(postId, {
-            include: [{ model: Comment, as: 'comments' }],
-        });
+        const comment = await Comment.findByPk(commentId);
 
-        if (!post) {
-            return res.status(404).json({ msg: 'Post not found' });
+        if (!comment) {
+            return res.status(404).json({ errors: { message: 'Comment not found' } });
         }
 
-        res.status(200).json({ comments: post.comments });
+        if (comment.userId !== req.user.id) {
+            return res.status(401).json({ errors: { message: 'Unauthorized' } });
+        }
+
+        comment.content = content;
+        await comment.save();
+
+        res.status(200).json({ message: 'Comment updated successfully', comment });
     } catch (error) {
-        res.status(500).json({ error: 'Server error' });
+        res.status(500).json({ errors: { message: 'Server error' } });
     }
 };
 
-// Видалення коментаря
 exports.deleteComment = async (req, res) => {
     const { commentId } = req.params;
 
@@ -55,17 +78,25 @@ exports.deleteComment = async (req, res) => {
         const comment = await Comment.findByPk(commentId);
 
         if (!comment) {
-            return res.status(404).json({ msg: 'Comment not found' });
+            return res.status(404).json({ errors: { message: 'Comment not found' } });
         }
 
         if (comment.userId !== req.user.id) {
-            return res.status(401).json({ msg: 'Unauthorized' });
+            return res.status(401).json({ errors: { message: 'Unauthorized' } });
         }
 
         await comment.destroy();
 
-        res.status(200).json({ msg: 'Comment deleted' });
+        res.status(200).json({ message: 'Comment deleted successfully' });
     } catch (error) {
-        res.status(500).json({ error: 'Server error' });
+        res.status(500).json({ errors: { message: 'Server error' } });
     }
 };
+
+exports.validateCommentCreation = [
+    check('content', 'Content is required').not().isEmpty()
+];
+
+exports.validateCommentUpdate = [
+    check('content', 'Content cannot be empty').not().isEmpty()
+];
